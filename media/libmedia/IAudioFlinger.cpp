@@ -1,10 +1,7 @@
 /*
 **
 ** Copyright 2007, The Android Open Source Project
-** Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
-**
-** Not a Contribution, Apache license notifications and license are retained
-** for attribution purposes only.
+** Copyright (c) 2012, Code Aurora Forum. All rights reserved.
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -36,7 +33,7 @@ enum {
     CREATE_TRACK = IBinder::FIRST_CALL_TRANSACTION,
     OPEN_RECORD,
     SAMPLE_RATE,
-    CHANNEL_COUNT,  // obsolete
+    CHANNEL_COUNT,
     FORMAT,
     FRAME_COUNT,
     LATENCY,
@@ -60,6 +57,10 @@ enum {
     CLOSE_OUTPUT,
     SUSPEND_OUTPUT,
     RESTORE_OUTPUT,
+#ifdef STE_AUDIO
+    ADD_INPUT_CLIENT,
+    REMOVE_INPUT_CLIENT,
+#endif
     OPEN_INPUT,
     CLOSE_INPUT,
     SET_STREAM_OUTPUT,
@@ -74,7 +75,7 @@ enum {
     GET_EFFECT_DESCRIPTOR,
     CREATE_EFFECT,
     MOVE_EFFECTS,
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_HARDWARE) && defined(QCOM_FM_ENABLED)
     SET_FM_VOLUME,
 #endif
     LOAD_HW_MODULE,
@@ -82,6 +83,9 @@ enum {
     GET_PRIMARY_OUTPUT_FRAME_COUNT,
 #ifdef QCOM_HARDWARE
     CREATE_DIRECT_TRACK
+#endif
+#ifdef STE_AUDIO
+    READ_INPUT
 #endif
 };
 
@@ -135,6 +139,7 @@ public:
             }
             lStatus = reply.readInt32();
             track = interface_cast<IAudioTrack>(reply.readStrongBinder());
+#ifdef QCOM_HARDWARE
         }
         if (status) {
             *status = lStatus;
@@ -142,7 +147,6 @@ public:
         return track;
     }
 
-#ifdef QCOM_HARDWARE
     virtual sp<IDirectTrack> createDirectTrack(
                                 pid_t pid,
                                 uint32_t sampleRate,
@@ -177,13 +181,13 @@ public:
             }
             lStatus = reply.readInt32();
             track = interface_cast<IDirectTrack>(reply.readStrongBinder());
+#endif
         }
         if (status) {
             *status = lStatus;
         }
         return track;
     }
-#endif
 
     virtual sp<IAudioRecord> openRecord(
                                 pid_t pid,
@@ -193,7 +197,7 @@ public:
                                 audio_channel_mask_t channelMask,
                                 int frameCount,
                                 track_flags_t flags,
-                                pid_t tid,
+                                pid_t tid,  // -1 means unused, otherwise must be valid non-0
                                 int *sessionId,
                                 status_t *status)
     {
@@ -495,11 +499,36 @@ public:
         return reply.readInt32();
     }
 
+#ifdef STE_AUDIO
+    virtual uint32_t *addInputClient(uint32_t clientId)
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeInt32(clientId);
+        remote()->transact(ADD_INPUT_CLIENT, data, &reply);
+        return (uint32_t*) reply.readIntPtr();
+    }
+
+    virtual status_t removeInputClient(uint32_t *pClientId)
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeIntPtr((intptr_t)pClientId);
+        remote()->transact(REMOVE_INPUT_CLIENT, data, &reply);
+        return reply.readInt32();
+    }
+#endif
+
     virtual audio_io_handle_t openInput(audio_module_handle_t module,
                                         audio_devices_t *pDevices,
                                         uint32_t *pSamplingRate,
                                         audio_format_t *pFormat,
+#ifdef STE_AUDIO
+                                        audio_channel_mask_t *pChannelMask,
+                                        audio_input_clients *pInputClientId)
+#else
                                         audio_channel_mask_t *pChannelMask)
+#endif
     {
         Parcel data, reply;
         audio_devices_t devices = pDevices ? *pDevices : (audio_devices_t)0;
@@ -513,6 +542,9 @@ public:
         data.writeInt32(samplingRate);
         data.writeInt32(format);
         data.writeInt32(channelMask);
+#ifdef STE_AUDIO
+        data.writeIntPtr((intptr_t)pInputClientId);
+#endif
         remote()->transact(OPEN_INPUT, data, &reply);
         audio_io_handle_t input = (audio_io_handle_t) reply.readInt32();
         devices = (audio_devices_t)reply.readInt32();
@@ -526,11 +558,18 @@ public:
         return input;
     }
 
+#ifdef STE_AUDIO
+    virtual status_t closeInput(int input, audio_input_clients *inputClientId)
+#else
     virtual status_t closeInput(int input)
+#endif
     {
         Parcel data, reply;
         data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
         data.writeInt32(input);
+#ifdef STE_AUDIO
+        data.writeIntPtr((intptr_t) inputClientId);
+#endif
         remote()->transact(CLOSE_INPUT, data, &reply);
         return reply.readInt32();
     }
@@ -583,6 +622,22 @@ public:
         remote()->transact(GET_INPUT_FRAMES_LOST, data, &reply);
         return reply.readInt32();
     }
+
+#ifdef STE_AUDIO
+    virtual size_t readInput(audio_io_handle_t input, audio_input_clients inputClientId,
+            void *buffer, uint32_t bytes, uint32_t *pOverwrittenBytes)
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(IAudioFlinger::getInterfaceDescriptor());
+        data.writeInt32(input);
+        data.writeInt32((uint32_t) inputClientId);
+        data.writeIntPtr((intptr_t) buffer);
+        data.writeInt32(bytes);
+        data.writeIntPtr((intptr_t) pOverwrittenBytes);
+        remote()->transact(READ_INPUT, data, &reply);
+        return reply.readInt32();
+    }
+#endif
 
     virtual int newAudioSessionId()
     {
@@ -734,7 +789,7 @@ public:
         return reply.readInt32();
     }
 
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_HARDWARE) && defined(QCOM_FM_ENABLED)
     virtual status_t setFmVolume(float volume)
     {
         Parcel data, reply;
@@ -786,7 +841,7 @@ status_t BnAudioFlinger::onTransact(
             int streamType = data.readInt32();
             uint32_t sampleRate = data.readInt32();
             audio_format_t format = (audio_format_t) data.readInt32();
-            audio_channel_mask_t channelMask = data.readInt32();
+            uint32_t channelMask = (audio_channel_mask_t) data.readInt32();
             size_t bufferCount = data.readInt32();
             track_flags_t flags = (track_flags_t) data.readInt32();
             sp<IMemory> buffer = interface_cast<IMemory>(data.readStrongBinder());
@@ -807,7 +862,7 @@ status_t BnAudioFlinger::onTransact(
             CHECK_INTERFACE(IAudioFlinger, data, reply);
             pid_t pid = data.readInt32();
             uint32_t sampleRate = data.readInt32();
-            audio_channel_mask_t channelMask = data.readInt32();
+            uint32_t channelMask = (audio_channel_mask_t) data.readInt32();
             audio_io_handle_t output = (audio_io_handle_t) data.readInt32();
             int sessionId = data.readInt32();
             IDirectTrackClient* client;
@@ -828,7 +883,7 @@ status_t BnAudioFlinger::onTransact(
             audio_io_handle_t input = (audio_io_handle_t) data.readInt32();
             uint32_t sampleRate = data.readInt32();
             audio_format_t format = (audio_format_t) data.readInt32();
-            audio_channel_mask_t channelMask = data.readInt32();
+            uint32_t channelMask = (audio_channel_mask_t)data.readInt32();
             size_t bufferCount = data.readInt32();
             track_flags_t flags = (track_flags_t) data.readInt32();
             pid_t tid = (pid_t) data.readInt32();
@@ -957,7 +1012,7 @@ status_t BnAudioFlinger::onTransact(
             CHECK_INTERFACE(IAudioFlinger, data, reply);
             uint32_t sampleRate = data.readInt32();
             audio_format_t format = (audio_format_t) data.readInt32();
-            audio_channel_mask_t channelMask = data.readInt32();
+            uint32_t channelMask = (audio_channel_mask_t)data.readInt32();
             reply->writeInt32( getInputBufferSize(sampleRate, format, channelMask) );
             return NO_ERROR;
         } break;
@@ -967,7 +1022,7 @@ status_t BnAudioFlinger::onTransact(
             audio_devices_t devices = (audio_devices_t)data.readInt32();
             uint32_t samplingRate = data.readInt32();
             audio_format_t format = (audio_format_t) data.readInt32();
-            audio_channel_mask_t channelMask = (audio_channel_mask_t)data.readInt32();
+            uint32_t channelMask = (audio_channel_mask_t)data.readInt32();
             uint32_t latency = data.readInt32();
             audio_output_flags_t flags = (audio_output_flags_t) data.readInt32();
             audio_io_handle_t output = openOutput(module,
@@ -1008,6 +1063,20 @@ status_t BnAudioFlinger::onTransact(
             reply->writeInt32(restoreOutput((audio_io_handle_t) data.readInt32()));
             return NO_ERROR;
         } break;
+#ifdef STE_AUDIO
+        case ADD_INPUT_CLIENT: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            uint32_t clientId = data.readInt32();
+            reply->writeIntPtr((intptr_t)addInputClient(clientId));
+            return NO_ERROR;
+        } break;
+        case REMOVE_INPUT_CLIENT: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            uint32_t *pClientId = (uint32_t*) data.readIntPtr();
+            reply->writeInt32(removeInputClient(pClientId));
+            return NO_ERROR;
+        } break;
+#endif
         case OPEN_INPUT: {
             CHECK_INTERFACE(IAudioFlinger, data, reply);
             audio_module_handle_t module = (audio_module_handle_t)data.readInt32();
@@ -1015,12 +1084,20 @@ status_t BnAudioFlinger::onTransact(
             uint32_t samplingRate = data.readInt32();
             audio_format_t format = (audio_format_t) data.readInt32();
             audio_channel_mask_t channelMask = (audio_channel_mask_t)data.readInt32();
+#ifdef STE_AUDIO
+            audio_input_clients *inputClientId = (audio_input_clients*) data.readIntPtr();
+#endif
 
             audio_io_handle_t input = openInput(module,
                                              &devices,
                                              &samplingRate,
                                              &format,
+#ifdef STE_AUDIO
+                                             &channelMask,
+                                             inputClientId);
+#else
                                              &channelMask);
+#endif
             reply->writeInt32((int32_t) input);
             reply->writeInt32(devices);
             reply->writeInt32(samplingRate);
@@ -1030,7 +1107,13 @@ status_t BnAudioFlinger::onTransact(
         } break;
         case CLOSE_INPUT: {
             CHECK_INTERFACE(IAudioFlinger, data, reply);
+#ifdef STE_AUDIO
+            uint32_t input = data.readInt32();
+            audio_input_clients *inputClientId = (audio_input_clients*) data.readIntPtr();
+            reply->writeInt32(closeInput((audio_io_handle_t) data.readInt32(), inputClientId));
+#else
             reply->writeInt32(closeInput((audio_io_handle_t) data.readInt32()));
+#endif
             return NO_ERROR;
         } break;
         case SET_STREAM_OUTPUT: {
@@ -1143,7 +1226,7 @@ status_t BnAudioFlinger::onTransact(
             reply->writeInt32(moveEffects(session, srcOutput, dstOutput));
             return NO_ERROR;
         } break;
-#ifdef QCOM_FM_ENABLED
+#if defined(QCOM_HARDWARE) && defined(QCOM_FM_ENABLED)
         case SET_FM_VOLUME: {
             CHECK_INTERFACE(IAudioFlinger, data, reply);
             float volume = data.readFloat();
@@ -1156,6 +1239,18 @@ status_t BnAudioFlinger::onTransact(
             reply->writeInt32(loadHwModule(data.readCString()));
             return NO_ERROR;
         } break;
+#ifdef STE_AUDIO
+        case READ_INPUT: {
+            CHECK_INTERFACE(IAudioFlinger, data, reply);
+            audio_io_handle_t input = data.readInt32();
+            audio_input_clients inputClientId = (audio_input_clients) data.readInt32();
+            void* buffer = (void*) data.readIntPtr();
+            uint32_t bytes = data.readInt32();
+            uint32_t *pOverwrittenBytes = (uint32_t*) data.readIntPtr();
+            reply->writeInt32(readInput(input, inputClientId, buffer, bytes, pOverwrittenBytes));
+            return NO_ERROR;
+        } break;
+#endif
         case GET_PRIMARY_OUTPUT_SAMPLING_RATE: {
             CHECK_INTERFACE(IAudioFlinger, data, reply);
             reply->writeInt32(getPrimaryOutputSamplingRate());

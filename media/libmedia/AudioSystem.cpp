@@ -48,6 +48,12 @@ audio_format_t AudioSystem::gPrevInFormat = AUDIO_FORMAT_PCM_16_BIT;
 audio_channel_mask_t AudioSystem::gPrevInChannelMask = AUDIO_CHANNEL_IN_MONO;
 size_t AudioSystem::gInBuffSize = 0;
 
+#ifdef STE_AUDIO
+// Clients for receiving latency update notifications
+Mutex AudioSystem::gLatencyLock;
+int AudioSystem::gNextUniqueLatencyId = 0;
+DefaultKeyedVector<int, sp<AudioSystem::NotificationClient> > AudioSystem::gLatencyNotificationClients(0);
+#endif
 
 // establish binder interface to AudioFlinger service
 const sp<IAudioFlinger>& AudioSystem::get_audio_flinger()
@@ -423,10 +429,36 @@ status_t AudioSystem::setFmVolume(float value)
     return af->setFmVolume(value);
 }
 #endif
+#ifdef STE_AUDIO
+int AudioSystem::registerLatencyNotificationClient(latency_update_callback cb,
+        void *cookie, audio_io_handle_t output) {
+    Mutex::Autolock _l(gLatencyLock);
+
+    sp<NotificationClient> notificationClient = new NotificationClient();
+    notificationClient->mCb = cb;
+    notificationClient->mCookie = cookie;
+    notificationClient->mOutput = output;
+
+    gNextUniqueLatencyId++;
+    gLatencyNotificationClients.add(gNextUniqueLatencyId, notificationClient);
+    return gNextUniqueLatencyId;
+}
+
+void AudioSystem::unregisterLatencyNotificationClient(int clientId) {
+    Mutex::Autolock _l(gLatencyLock);
+    gLatencyNotificationClients.removeItem(clientId);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 
 void AudioSystem::AudioFlingerClient::binderDied(const wp<IBinder>& who) {
+#ifdef STE_AUDIO
+    gLatencyLock.lock();
+    AudioSystem::gLatencyNotificationClients.clear();
+    gLatencyLock.unlock();
+#endif
+
     Mutex::Autolock _l(AudioSystem::gLock);
 
     AudioSystem::gAudioFlinger.clear();
@@ -492,6 +524,22 @@ void AudioSystem::AudioFlingerClient::ioConfigChanged(int event, audio_io_handle
         outputDesc =  new OutputDescriptor(*desc);
         gOutputs.replaceValueFor(ioHandle, outputDesc);
     } break;
+#ifdef STE_AUDIO
+    case SINK_LATENCY_CHANGED: {
+        int sinkLatency = *((int*)param2);
+        gLock.unlock();
+        gLatencyLock.lock();
+        size_t size = gLatencyNotificationClients.size();
+        for (size_t i = 0; i < size; i++) {
+            sp<NotificationClient> client = gLatencyNotificationClients.valueAt(i);
+            if (client->mOutput == ioHandle) {
+                (*client->mCb)(client->mCookie, ioHandle, sinkLatency);
+            }
+        }
+        gLatencyLock.unlock();
+        gLock.lock();
+    } break;
+#endif
     case INPUT_OPENED:
     case INPUT_CLOSED:
     case INPUT_CONFIG_CHANGED:
@@ -619,6 +667,10 @@ extern "C" audio_io_handle_t _ZN7android11AudioSystem9getOutputE19audio_stream_t
                                     uint32_t samplingRate,
                                     uint32_t format,
                                     uint32_t channels,
+#ifdef STE_AUDIO
+                                    int sessionId,
+                                    audio_input_clients *inputClientId,
+#endif
                                     audio_output_flags_t flags) {
     return AudioSystem::getOutput(stream,samplingRate,(audio_format_t) format, channels, flags);
 }
@@ -652,11 +704,20 @@ audio_io_handle_t AudioSystem::getInput(audio_source_t inputSource,
                                     uint32_t samplingRate,
                                     audio_format_t format,
                                     audio_channel_mask_t channelMask,
+#ifdef STE_AUDIO
+                                    int sessionId,
+                                    audio_input_clients *inputClientId)
+#else
                                     int sessionId)
+#endif
 {
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return 0;
+#ifdef STE_AUDIO
+    return aps->getInput(inputSource, samplingRate, format, channelMask, sessionId, inputClientId);
+#else
     return aps->getInput(inputSource, samplingRate, format, channelMask, sessionId);
+#endif
 }
 
 status_t AudioSystem::startInput(audio_io_handle_t input)

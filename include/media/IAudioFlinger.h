@@ -1,9 +1,6 @@
 /*
  * Copyright (C) 2007 The Android Open Source Project
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
- *
- * Not a Contribution, Apache license notifications and license are retained
- * for attribution purposes only.
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +53,7 @@ public:
     enum {
         TRACK_DEFAULT = 0,  // client requests a default AudioTrack
         TRACK_TIMED   = 1,  // client requests a TimedAudioTrack
-        TRACK_FAST    = 2,  // client requests a fast AudioTrack or AudioRecord
+        TRACK_FAST    = 2,  // client requests a fast AudioTrack
     };
     typedef uint32_t track_flags_t;
 
@@ -102,7 +99,7 @@ public:
                                 track_flags_t flags,
                                 pid_t tid,  // -1 means unused, otherwise must be valid non-0
                                 int *sessionId,
-                                status_t *status) = 0;
+                                status_t *status);
 
     /* query the audio hardware state. This state never changes,
      * and therefore can be cached.
@@ -168,12 +165,26 @@ public:
     virtual status_t suspendOutput(audio_io_handle_t output) = 0;
     virtual status_t restoreOutput(audio_io_handle_t output) = 0;
 
+#ifdef STE_AUDIO
+    virtual uint32_t *addInputClient(uint32_t clientId) = 0;
+    virtual status_t removeInputClient(uint32_t *pClientId) = 0;
+
+    virtual audio_io_handle_t openInput(audio_module_handle_t module,
+                                        audio_devices_t *pDevices,
+                                        uint32_t *pSamplingRate,
+                                        audio_format_t *pFormat,
+                                        audio_channel_mask_t *pChannelMask,
+                                        audio_input_clients *inputClientId = NULL) = 0;
+    virtual status_t closeInput(audio_io_handle_t input,
+                                audio_input_clients *inputClientId = NULL) = 0;
+#else
     virtual audio_io_handle_t openInput(audio_module_handle_t module,
                                         audio_devices_t *pDevices,
                                         uint32_t *pSamplingRate,
                                         audio_format_t *pFormat,
                                         audio_channel_mask_t *pChannelMask) = 0;
     virtual status_t closeInput(audio_io_handle_t input) = 0;
+#endif
 
     virtual status_t setStreamOutput(audio_stream_type_t stream, audio_io_handle_t output) = 0;
 
@@ -208,21 +219,27 @@ public:
 
     virtual status_t moveEffects(int session, audio_io_handle_t srcOutput,
                                     audio_io_handle_t dstOutput) = 0;
-
-    virtual audio_module_handle_t loadHwModule(const char *name) = 0;
-#ifdef QCOM_HARDWARE
-    virtual status_t deregisterClient(const sp<IAudioFlingerClient>& client) { return false; };
+#ifdef STE_AUDIO
+    virtual size_t readInput(audio_io_handle_t input,
+                            audio_input_clients inputClientId,
+                            void *buffer,
+                            uint32_t bytes,
+                            uint32_t *pOverwrittenBytes) = 0;
 #endif
 
-    // helpers for android.media.AudioManager.getProperty(), see description there for meaning
+    virtual audio_module_handle_t loadHwModule(const char *name) = 0;
+
+// helpers for android.media.AudioManager.getProperty(), see description there for meaning
     // FIXME move these APIs to AudioPolicy to permit a more accurate implementation
     // that looks on primary device for a stream with fast flag, primary flag, or first one.
     virtual int32_t getPrimaryOutputSamplingRate() = 0;
     virtual int32_t getPrimaryOutputFrameCount() = 0;
+#ifdef QCOM_HARDWARE
+    virtual status_t deregisterClient(const sp<IAudioFlingerClient>& client) { return false; };
 #ifdef QCOM_FM_ENABLED
     virtual status_t setFmVolume(float volume) = 0;
 #endif
-
+#endif
 };
 
 

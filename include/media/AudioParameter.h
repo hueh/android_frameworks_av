@@ -57,6 +57,9 @@ public:
     static const char * const keyHandleA2dpDevice;
     static const char * const keyADSPStatus;
 #endif
+#ifdef STE_AUDIO
+    static const char * const keySinkLatency;
+#endif
 
     String8 toString();
 

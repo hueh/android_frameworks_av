@@ -302,6 +302,18 @@ void OMXCodec::findMatchingCodecs(
     }
 }
 
+#ifdef STE_HARDWARE
+uint32_t OMXCodec::OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
+    switch (omxValue) {
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
+        default:
+            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
+            return omxValue;
+    }
+}
+#endif
+
 // static
 uint32_t OMXCodec::getComponentQuirks(
         const MediaCodecList *list, size_t index) {
@@ -960,6 +972,9 @@ static size_t getFrameSize(
         case OMX_COLOR_FormatYUV420Planar:
         case OMX_COLOR_FormatYUV420SemiPlanar:
         case OMX_TI_COLOR_FormatYUV420PackedSemiPlanar:
+#ifdef STE_HARDWARE
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+#endif
         /*
         * FIXME: For the Opaque color format, the frame size does not
         * need to be (w*h*3)/2. It just needs to
@@ -1513,6 +1528,9 @@ status_t OMXCodec::setVideoOutputFormat(
                || format.eColorFormat == OMX_SEC_COLOR_FormatNV12TPhysicalAddress
                || format.eColorFormat == OMX_SEC_COLOR_FormatNV12Tiled
 #endif
+#ifdef STE_HARDWARE
+               || format.eColorFormat == OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB
+#endif
                );
 
 #ifdef USE_SAMSUNG_COLORFORMAT
@@ -1789,6 +1807,17 @@ status_t OMXCodec::init() {
     CHECK_EQ((int)mState, (int)LOADED);
 
     status_t err;
+#ifdef STE_HARDWARE
+    if ((mQuirks & kRequiresStoreMetaDataBeforeIdle)
+        && (mFlags & kStoreMetaDataInVideoBuffers)) {
+        err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexInput, OMX_TRUE);
+        if (err != OK) {
+            ALOGE("Storing meta data in video buffers is not supported");
+            return err;
+        }
+    }
+#endif
+
     if (!(mQuirks & kRequiresLoadedToIdleAfterAllocation)) {
         err = mOMX->sendCommand(mNode, OMX_CommandStateSet, OMX_StateIdle);
         CHECK_EQ(err, (status_t)OK);
@@ -1844,7 +1873,12 @@ status_t OMXCodec::allocateBuffersOnPort(OMX_U32 portIndex) {
     }
 
     status_t err = OK;
+#ifdef STE_HARDWARE
+    if (!(mQuirks & kRequiresStoreMetaDataBeforeIdle)
+            && (mFlags & kStoreMetaDataInVideoBuffers)
+#else
     if ((mFlags & kStoreMetaDataInVideoBuffers)
+#endif
             && portIndex == kPortIndexInput) {
         err = mOMX->storeMetaDataInBuffers(mNode, kPortIndexInput, OMX_TRUE);
         if (err != OK) {
@@ -2065,7 +2099,13 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             mNativeWindow.get(),
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
+#ifdef STE_HARDWARE
+    if (!(mQuirks & kRequiresStoreMetaDataBeforeIdle)
+            && (mFlags & kStoreMetaDataInVideoBuffers)
+#else
             eColorFormat);
+
+#endif
 #endif
 
     if (err != 0) {
