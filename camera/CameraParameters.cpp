@@ -293,7 +293,7 @@ const char CameraParameters::SCENE_MODE_SPORTS[] = "sports";
 const char CameraParameters::SCENE_MODE_PARTY[] = "party";
 const char CameraParameters::SCENE_MODE_CANDLELIGHT[] = "candlelight";
 #ifdef QCOM_HARDWARE
-#ifdef SAMSUNG_CAMERA_LEGACY
+#if defined (SAMSUNG_CAMERA_LEGACY) && defined(STE_HARDWARE)
 const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "back-light";
 #else
 const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "backlight";
