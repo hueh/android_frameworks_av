@@ -789,8 +789,8 @@ public:
     static const char SCENE_MODE_SPORTS[];
     static const char SCENE_MODE_PARTY[];
     static const char SCENE_MODE_CANDLELIGHT[];
-#ifdef QCOM_HARDWARE
     static const char SCENE_MODE_BACKLIGHT[];
+#ifdef QCOM_HARDWARE
     static const char SCENE_MODE_FLOWERS[];
     static const char SCENE_MODE_AR[];
 #endif
