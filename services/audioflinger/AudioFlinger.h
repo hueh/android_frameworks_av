@@ -1,7 +1,10 @@
 /*
 **
 ** Copyright 2007, The Android Open Source Project
-** Copyright (c) 2012 Code Aurora Forum. All rights reserved.
+** Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+**
+** Not a Contribution, Apache license notifications and license are retained
+** for attribution purposes only.
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -127,6 +130,7 @@ public:
                                 audio_channel_mask_t channelMask,
                                 int frameCount,
                                 IAudioFlinger::track_flags_t flags,
+                                pid_t tid,
                                 int *sessionId,
                                 status_t *status);
 
@@ -159,7 +163,6 @@ public:
     virtual     String8     getParameters(audio_io_handle_t ioHandle, const String8& keys) const;
 
     virtual     void        registerClient(const sp<IAudioFlingerClient>& client);
-
 #ifdef QCOM_HARDWARE
     virtual status_t deregisterClient(const sp<IAudioFlingerClient>& client);
 #endif
@@ -183,34 +186,13 @@ public:
 
     virtual status_t restoreOutput(audio_io_handle_t output);
 
-#ifdef STE_AUDIO
-    virtual uint32_t *addInputClient(uint32_t clientId);
-
-    virtual status_t removeInputClient(uint32_t *pClientId);
-#endif
-
     virtual audio_io_handle_t openInput(audio_module_handle_t module,
                                         audio_devices_t *pDevices,
                                         uint32_t *pSamplingRate,
                                         audio_format_t *pFormat,
-#ifdef STE_AUDIO
-                                        audio_channel_mask_t *pChannelMask,
-                                        audio_input_clients *pInputClientId = NULL);
-
-    virtual status_t closeInput(audio_io_handle_t input, audio_input_clients *inputClientId = NULL);
-    virtual size_t readInput(audio_io_handle_t input,
-                            audio_input_clients inputClientId,
-                            void *buffer,
-                            uint32_t bytes,
-                            uint32_t *pOverwrittenBytes);
-
-#else
                                         audio_channel_mask_t *pChannelMask);
 
     virtual status_t closeInput(audio_io_handle_t input);
-#endif
-
-
 
     virtual status_t setStreamOutput(audio_stream_type_t stream, audio_io_handle_t output);
 
@@ -247,7 +229,7 @@ public:
     virtual status_t moveEffects(int sessionId, audio_io_handle_t srcOutput,
                         audio_io_handle_t dstOutput);
 
-#if defined(QCOM_HARDWARE) && defined(QCOM_FM_ENABLED)
+#ifdef QCOM_FM_ENABLED
     virtual status_t setFmVolume(float volume);
 #endif
 
@@ -263,7 +245,8 @@ public:
                                 uint32_t flags);
 
 #ifdef QCOM_HARDWARE
-    void applyEffectsOn(int16_t *buffer1,
+    void applyEffectsOn(void *token,
+                        int16_t *buffer1,
                         int16_t *buffer2,
                         int size);
 #endif
@@ -326,14 +309,14 @@ private:
     // RefBase
     virtual     void        onFirstRef();
 
-    AudioHwDevice*      findSuitableHwDev_l(audio_module_handle_t module, audio_devices_t devices);
+    AudioHwDevice*          findSuitableHwDev_l(audio_module_handle_t module, audio_devices_t devices);
     void                    purgeStaleEffects_l();
 
     // standby delay for MIXER and DUPLICATING playback threads is read from property
     // ro.audio.flinger_standbytime_ms or defaults to kDefaultStandbyTimeInNsecs
     static nsecs_t          mStandbyTimeInNsecs;
 
-    // Internal dump utilites.
+    // Internal dump utilities.
     void dumpPermissionDenial(int fd, const Vector<String16>& args);
     void dumpClients(int fd, const Vector<String16>& args);
     void dumpInternals(int fd, const Vector<String16>& args);
@@ -366,11 +349,7 @@ private:
     public:
                             NotificationClient(const sp<AudioFlinger>& audioFlinger,
                                                 const sp<IAudioFlingerClient>& client,
-#ifdef QCOM_HARDWARE
                                                 sp<IBinder> binder);
-#else
-                                                pid_t pid);
-#endif
         virtual             ~NotificationClient();
 
                 sp<IAudioFlingerClient> audioFlingerClient() const { return mAudioFlingerClient; }
@@ -383,11 +362,7 @@ private:
                             NotificationClient& operator = (const NotificationClient&);
 
         const sp<AudioFlinger>  mAudioFlinger;
-#ifdef QCOM_HARDWARE
         sp<IBinder>             mBinder;
-#else
-        const pid_t             mPid;
-#endif
         const sp<IAudioFlingerClient> mAudioFlingerClient;
     };
 
@@ -452,9 +427,6 @@ private:
                                         audio_format_t format,
                                         audio_channel_mask_t channelMask,
                                         int frameCount,
-#ifdef QCOM_HARDWARE
-                                        uint32_t flags,
-#endif
                                         const sp<IMemory>& sharedBuffer,
                                         int sessionId);
             virtual             ~TrackBase();
@@ -489,6 +461,13 @@ private:
 
             int sampleRate() const; // FIXME inline after cblk sr moved
 
+            // Return a pointer to the start of a contiguous slice of the track buffer.
+            // Parameter 'offset' is the requested start position, expressed in
+            // monotonically increasing frame units relative to the track epoch.
+            // Parameter 'frames' is the requested length, also in frame units.
+            // Always returns non-NULL.  It is the caller's responsibility to
+            // verify that this will be successful; the result of calling this
+            // function with invalid 'offset' or 'frames' is undefined.
             void* getBuffer(uint32_t offset, uint32_t frames) const;
 
             bool isStopped() const {
@@ -517,8 +496,9 @@ private:
             /*const*/ sp<Client> mClient;   // see explanation at ~TrackBase() why not const
             sp<IMemory>         mCblkMemory;
             audio_track_cblk_t* mCblk;
-            void*               mBuffer;
-            void*               mBufferEnd;
+            void*               mBuffer;    // start of track buffer, typically in shared memory
+            void*               mBufferEnd; // &mBuffer[mFrameCount * frameSize], where frameSize
+                                            //   is based on mChannelCount and 16-bit samples
             uint32_t            mFrameCount;
             // we don't really need a lock for these
             track_state         mState;
@@ -526,12 +506,9 @@ private:
                                 // support dynamic rates, the current value is in control block
             const audio_format_t mFormat;
             bool                mStepServerFailed;
-#ifdef QCOM_HARDWARE
-            uint32_t            mFlags;
-#endif
             const int           mSessionId;
             uint8_t             mChannelCount;
-            audio_channel_mask_t            mChannelMask;
+            audio_channel_mask_t mChannelMask;
             Vector < sp<SyncEvent> >mSyncEvents;
         };
 
@@ -591,6 +568,7 @@ private:
             const int32_t mPrio;
         };
 
+
         class PMDeathRecipient : public IBinder::DeathRecipient {
         public:
                         PMDeathRecipient(const wp<ThreadBase>& thread) : mThread(thread) {}
@@ -607,6 +585,8 @@ private:
         };
 
         virtual     status_t    initCheck() const = 0;
+
+                    // static externally-visible
                     type_t      type() const { return mType; }
                     audio_io_handle_t id() const { return mId;}
 
@@ -616,10 +596,11 @@ private:
                     audio_channel_mask_t channelMask() const { return mChannelMask; }
                     audio_format_t format() const { return mFormat; }
                     // Called by AudioFlinger::frameCount(audio_io_handle_t output) and effects,
-                    // and returns the normal mix buffer's frame count.  No API for HAL frame count.
+                    // and returns the normal mix buffer's frame count.
                     size_t      frameCount() const { return mNormalFrameCount; }
                     // Return's the HAL's frame count i.e. fast mixer buffer size.
                     size_t      frameCountHAL() const { return mFrameCount; }
+
         // Should be "virtual status_t requestExitAndWait()" and override same
         // method in Thread, but Thread::requestExitAndWait() is not yet virtual.
                     void        exit();
@@ -634,9 +615,12 @@ private:
                     void        sendIoConfigEvent_l(int event, int param = 0);
                     void        sendPrioConfigEvent_l(pid_t pid, pid_t tid, int32_t prio);
                     void        processConfigEvents();
+
+                    // see note at declaration of mStandby, mOutDevice and mInDevice
                     bool        standby() const { return mStandby; }
                     audio_devices_t outDevice() const { return mOutDevice; }
                     audio_devices_t inDevice() const { return mInDevice; }
+
         virtual     audio_stream_t* stream() const = 0;
 
                     sp<EffectHandle> createEffect_l(
@@ -662,13 +646,11 @@ private:
                     // get effect chain corresponding to session Id.
                     sp<EffectChain> getEffectChain(int sessionId);
                     // same as getEffectChain() but must be called with ThreadBase mutex locked
-                    sp<EffectChain> getEffectChain_l(int sessionId); const
+                    sp<EffectChain> getEffectChain_l(int sessionId) const;
                     // add an effect chain to the chain list (mEffectChains)
-#if 0
-                    virtual     status_t addEffectChain_l(const sp<EffectChain>& chain) = 0;
+        virtual     status_t addEffectChain_l(const sp<EffectChain>& chain) = 0;
                     // remove an effect chain from the chain list (mEffectChains)
-                    virtual     size_t removeEffectChain_l(const sp<EffectChain>& chain) = 0;
-#endif 
+        virtual     size_t removeEffectChain_l(const sp<EffectChain>& chain) = 0;
                     // lock all effect chains Mutexes. Must be called before releasing the
                     // ThreadBase mutex before processing the mixer and effects. This guarantees the
                     // integrity of the chains during the process.
@@ -783,15 +765,17 @@ private:
                     status_t                mParamStatus;
 
                     Vector<ConfigEvent *>     mConfigEvents;
+
                     // These fields are written and read by thread itself without lock or barrier,
-                    // and read by other threads without lock or barrier via standby() and device().
+                    // and read by other threads without lock or barrier via standby() , outDevice()
+                    // and inDevice().
                     // Because of the absence of a lock or barrier, any other thread that reads
                     // these fields must use the information in isolation, or be prepared to deal
                     // with possibility that it might be inconsistent with other information.
                     bool                    mStandby;   // Whether thread is currently in standby.
                     audio_devices_t         mOutDevice;   // output device
                     audio_devices_t         mInDevice;    // input device
-                                                        // input + output devices for RecordThread
+                    audio_source_t          mAudioSource; // (see audio.h, audio_source_t)
 
                     const audio_io_handle_t mId;
                     Vector< sp<EffectChain> > mEffectChains;
@@ -845,7 +829,8 @@ private:
 
             static  void        appendDumpHeader(String8& result);
                     void        dump(char* buffer, size_t size);
-            virtual status_t    start(AudioSystem::sync_event_t event, int triggerSession);
+            virtual status_t    start(AudioSystem::sync_event_t event = AudioSystem::SYNC_EVENT_NONE,
+                                     int triggerSession = 0);
             virtual void        stop();
                     void        pause();
 
@@ -909,6 +894,7 @@ private:
             void triggerEvents(AudioSystem::sync_event_t type);
             virtual bool isTimedTrack() const { return false; }
             bool isFastTrack() const { return (mFlags & IAudioFlinger::TRACK_FAST) != 0; }
+
         protected:
 
             // written by Track::mute() called by binder thread(s), without a mutex or barrier.
@@ -1084,7 +1070,7 @@ private:
                         audio_io_handle_t id, audio_devices_t device, type_t type);
         virtual             ~PlaybackThread();
 
-                    void    dump(int fd, const Vector<String16>& args);
+                    void        dump(int fd, const Vector<String16>& args);
 
         // Thread virtuals
         virtual     status_t    readyToRun();
@@ -1109,7 +1095,6 @@ protected:
 
         // ThreadBase virtuals
         virtual     void        preExit();
-
 
 public:
 
@@ -1177,15 +1162,19 @@ public:
 
                     virtual status_t setSyncEvent(const sp<SyncEvent>& event);
                     virtual bool     isValidSyncEvent(const sp<SyncEvent>& event) const;
+                            void     invalidateTracks(audio_stream_type_t streamType);
+
 
     protected:
         int16_t*                        mMixBuffer;
+
         // suspend count, > 0 means suspended.  While suspended, the thread continues to pull from
         // tracks and mix, but doesn't write to HAL.  A2DP and SCO HAL implementations can't handle
         // concurrent use of both of them, so Audio Policy Service suspends one of the threads to
         // workaround that restriction.
         // 'volatile' means accessed via atomic operations and no lock.
         volatile int32_t                mSuspended;
+
         int                             mBytesWritten;
     private:
         // mMasterMute is in both PlaybackThread and in AudioFlinger.  When a
@@ -1240,6 +1229,7 @@ public:
         // mStreamTypes[] uses 1 additional stream type internally for the OutputTrack used by DuplicatingThread
         stream_type_t                   mStreamTypes[AUDIO_STREAM_CNT + 1];
         AudioStreamOut                  *mOutput;
+
         float                           mMasterVolume;
         nsecs_t                         mLastWriteTime;
         int                             mNumWrites;
@@ -1308,9 +1298,8 @@ public:
 
         // Thread virtuals
 
-                    void        invalidateTracks(audio_stream_type_t streamType);
         virtual     bool        checkForNewParameters_l();
-        virtual     void    dumpInternals(int fd, const Vector<String16>& args);
+        virtual     void        dumpInternals(int fd, const Vector<String16>& args);
 
     protected:
         virtual     mixer_state prepareTracks_l(Vector< sp<Track> > *tracksToRemove);
@@ -1447,7 +1436,7 @@ private:
                                      bool reRegister);
               // return thread associated with primary hardware device, or NULL
               PlaybackThread *primaryPlaybackThread_l() const;
-              uint32_t primaryOutputDevice_l() const;
+              audio_devices_t primaryOutputDevice_l() const;
 
               sp<PlaybackThread> getEffectThread_l(int sessionId, int EffectId);
 
@@ -1479,38 +1468,12 @@ private:
         AudioSessionDescriptor *mOutputDesc;
         int  mOutput;
         bool mIsPaused;
-        void clearPowerManager();
-        class PMDeathRecipient : public IBinder::DeathRecipient {
-            public:
-                            PMDeathRecipient(void *obj){parentClass = (DirectAudioTrack *)obj;}
-                virtual     ~PMDeathRecipient() {}
-
-                // IBinder::DeathRecipient
-                virtual     void        binderDied(const wp<IBinder>& who);
-
-            private:
-                            DirectAudioTrack *parentClass;
-                            PMDeathRecipient(const PMDeathRecipient&);
-                            PMDeathRecipient& operator = (const PMDeathRecipient&);
-
-            friend class DirectAudioTrack;
-        };
-
-        friend class PMDeathRecipient;
-
-        Mutex pmLock;
-        void        acquireWakeLock();
-        void        releaseWakeLock();
-
-        sp<IPowerManager>       mPowerManager;
-        sp<IBinder>             mWakeLockToken;
-        sp<PMDeathRecipient>    mDeathRecipient;
         audio_output_flags_t mFlag;
 
         class BufferInfo {
         public:
             BufferInfo(void *buf1, void *buf2, int32_t nSize) :
-            localBuf(buf1), dspBuf(buf2), memBufsize(nSize), bytesToWrite(0)
+            localBuf(buf1), dspBuf(buf2), memBufsize(nSize)
             {}
 
             void *localBuf;
@@ -1557,8 +1520,36 @@ private:
         // helper function to obtain AudioFlinger service handle
         sp<AudioFlinger> mAudioFlinger;
         sp<AudioFlingerDirectTrackClient> mAudioFlingerClient;
+
+	void clearPowerManager();
+        class PMDeathRecipient : public IBinder::DeathRecipient {
+            public:
+                            PMDeathRecipient(void *obj){parentClass = (DirectAudioTrack *)obj;}
+                virtual     ~PMDeathRecipient() {}
+
+                // IBinder::DeathRecipient
+                virtual     void        binderDied(const wp<IBinder>& who);
+
+            private:
+                            DirectAudioTrack *parentClass;
+                            PMDeathRecipient(const PMDeathRecipient&);
+                            PMDeathRecipient& operator = (const PMDeathRecipient&);
+
+            friend class DirectAudioTrack;
+        };
+
+        friend class PMDeathRecipient;
+
+        Mutex pmLock;
+        void        acquireWakeLock();
+        void        releaseWakeLock();
+
+        sp<IPowerManager>       mPowerManager;
+        sp<IBinder>             mWakeLockToken;
+        sp<PMDeathRecipient>    mDeathRecipient;
     };
 #endif
+
     class TrackHandle : public android::BnAudioTrack {
     public:
                             TrackHandle(const sp<PlaybackThread::Track>& track);
@@ -1583,15 +1574,12 @@ private:
     };
 
                 void        removeClient_l(pid_t pid);
-#ifdef QCOM_HARDWARE
                 void        removeNotificationClient(sp<IBinder> binder);
-#else
-                void        removeNotificationClient(pid_t pid);
-#endif
 
 
     // record thread
     class RecordThread : public ThreadBase, public AudioBufferProvider
+                            // derives from AudioBufferProvider interface for use by resampler
     {
     public:
 
@@ -1604,14 +1592,10 @@ private:
                                         audio_format_t format,
                                         audio_channel_mask_t channelMask,
                                         int frameCount,
-#ifdef QCOM_HARDWARE
-                                        uint32_t flags,
-#endif
                                         int sessionId);
             virtual             ~RecordTrack();
 
-            virtual status_t    start(AudioSystem::sync_event_t event = AudioSystem::SYNC_EVENT_NONE,
-                                     int triggerSession = 0);
+            virtual status_t    start(AudioSystem::sync_event_t event, int triggerSession);
             virtual void        stop();
 
                     void        destroy();
@@ -1634,21 +1618,15 @@ private:
             virtual status_t getNextBuffer(AudioBufferProvider::Buffer* buffer, int64_t pts = kInvalidPTS);
             // releaseBuffer() not overridden
 
-            bool                mOverflow;
+            bool                mOverflow;  // overflow on most recent attempt to fill client buffer
         };
-
 
                 RecordThread(const sp<AudioFlinger>& audioFlinger,
                         AudioStreamIn *input,
                         uint32_t sampleRate,
                         audio_channel_mask_t channelMask,
                         audio_io_handle_t id,
-#ifdef STE_AUDIO
-                        audio_devices_t device,
-                        audio_input_clients pInputClientId);
-#else
                         audio_devices_t device);
-#endif
                 virtual     ~RecordThread();
 
         // no addTrack_l ?
@@ -1658,8 +1636,7 @@ private:
         void        dumpInternals(int fd, const Vector<String16>& args);
         void        dumpTracks(int fd, const Vector<String16>& args);
 
-
-        // Thread
+        // Thread virtuals
         virtual bool        threadLoop();
         virtual status_t    readyToRun();
 
@@ -1673,10 +1650,9 @@ private:
                         audio_format_t format,
                         audio_channel_mask_t channelMask,
                         int frameCount,
-#ifdef QCOM_HARDWARE
-                        uint32_t flags,
-#endif
                         int sessionId,
+                        IAudioFlinger::track_flags_t flags,
+                        pid_t tid,
                         status_t *status);
 
                 status_t    start(RecordTrack* recordTrack,
@@ -1687,8 +1663,7 @@ private:
                 // return true if the caller should then do it's part of the stopping process
                 bool        stop_l(RecordTrack* recordTrack);
 
-                void    dump(int fd, const Vector<String16>& args);
-                AudioStreamIn* getInput() const;
+                void        dump(int fd, const Vector<String16>& args);
                 AudioStreamIn* clearInput();
                 virtual audio_stream_t* stream() const;
 
@@ -1702,10 +1677,9 @@ private:
                 void        readInputParameters();
         virtual unsigned int  getInputFramesLost();
 
-        virtual status_t addEffectChain_l(const sp<EffectChain>& chain) = 0;
-        virtual size_t removeEffectChain_l(const sp<EffectChain>& chain) = 0;
+        virtual status_t addEffectChain_l(const sp<EffectChain>& chain);
+        virtual size_t removeEffectChain_l(const sp<EffectChain>& chain);
         virtual uint32_t hasAudioSession(int sessionId) const;
-
 
                 // Return the set of unique session IDs across all tracks.
                 // The keys are the session IDs, and the associated values are meaningless.
@@ -1721,7 +1695,6 @@ private:
     private:
                 void clearSyncStartEvent();
 
-                RecordThread();
                 // Enter standby if not already in standby, and set mStandby flag
                 void standby();
 
@@ -1742,9 +1715,6 @@ private:
                 const int                           mReqChannelCount;
                 const uint32_t                      mReqSampleRate;
                 ssize_t                             mBytesRead;
-#ifdef STE_AUDIO
-                audio_input_clients                 mInputClientId;
-#endif
                 // sync event triggering actual audio capture. Frames read before this event will
                 // be dropped and therefore not read by the application.
                 sp<SyncEvent>                       mSyncStartEvent;
@@ -1752,9 +1722,6 @@ private:
                 // when < 0, maximum frames to drop before starting capture even if sync event is
                 // not received
                 ssize_t                             mFramestoDrop;
-#ifdef QCOM_HARDWARE
-                int16_t                             mInputSource;
-#endif
     };
 
     // server side of the client's IAudioRecord
@@ -1837,6 +1804,7 @@ private:
         int sessionId() const {
             return mSessionId;
         }
+        status_t    setEnabled(bool enabled);
         status_t    setEnabled_l(bool enabled);
         bool isEnabled() const;
         bool isProcessEnabled() const;
@@ -1853,12 +1821,13 @@ private:
         size_t disconnect(EffectHandle *handle, bool unpinIfLast);
         size_t removeHandle(EffectHandle *handle);
 
-        effect_descriptor_t& desc() { return mDescriptor; }
+        const effect_descriptor_t& desc() const { return mDescriptor; }
         wp<EffectChain>&     chain() { return mChain; }
 
         status_t         setDevice(audio_devices_t device);
         status_t         setVolume(uint32_t *left, uint32_t *right, bool controller);
         status_t         setMode(audio_mode_t mode);
+        status_t         setAudioSource(audio_source_t source);
         status_t         start();
         status_t         stop();
         void             setSuspended(bool suspended);
@@ -1871,12 +1840,11 @@ private:
         bool             purgeHandles();
         void             lock() { mLock.lock(); }
         void             unlock() { mLock.unlock(); }
-
 #ifdef QCOM_HARDWARE
         bool             isOnLPA() { return mIsForLPA;}
         void             setLPAFlag(bool isForLPA) {mIsForLPA = isForLPA; }
 #endif
-        void         dump(int fd, const Vector<String16>& args);
+        void             dump(int fd, const Vector<String16>& args);
 
     protected:
         friend class AudioFlinger;      // for mHandles
@@ -1894,9 +1862,9 @@ private:
 mutable Mutex               mLock;      // mutex for process, commands and handles list protection
         wp<ThreadBase>      mThread;    // parent thread
         wp<EffectChain>     mChain;     // parent effect chain
-        const int                 mId;        // this instance unique ID
-        const int                 mSessionId; // audio session ID
-        effect_descriptor_t mDescriptor;// effect descriptor received from effect engine
+        const int           mId;        // this instance unique ID
+        const int           mSessionId; // audio session ID
+        const effect_descriptor_t mDescriptor;// effect descriptor received from effect engine
         effect_config_t     mConfig;    // input and output audio configuration
         effect_handle_t  mEffectInterface; // Effect module C API
         status_t            mStatus;    // initialization status
@@ -1961,6 +1929,7 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
         int id() const { return mEffect->id(); }
         int priority() const { return mPriority; }
         bool hasControl() const { return mHasControl; }
+        sp<EffectModule> effect() const { return mEffect; }
         // destroyed_l() must be called with the associated EffectModule mLock held
         bool destroyed_l() const { return mDestroyed; }
 
@@ -1971,9 +1940,6 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
         EffectHandle(const EffectHandle&);
         EffectHandle& operator =(const EffectHandle&);
 
-#ifdef STE_AUDIO
-        Mutex               mLock;          // mutex protecting mEffect pointer
-#endif
         sp<EffectModule> mEffect;           // pointer to controlled EffectModule
         sp<IEffectClient> mEffectClient;    // callback interface for client notifications
         /*const*/ sp<Client> mClient;       // client for shared memory allocation, see disconnect()
@@ -2023,6 +1989,7 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
 #ifdef QCOM_HARDWARE
         size_t getNumEffects() { return mEffects.size(); }
 #endif
+
         int sessionId() const { return mSessionId; }
         void setSessionId(int sessionId) { mSessionId = sessionId; }
 
@@ -2035,6 +2002,7 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
         bool setVolume_l(uint32_t *left, uint32_t *right);
         void setDevice_l(audio_devices_t device);
         void setMode_l(audio_mode_t mode);
+        void setAudioSource_l(audio_source_t source);
 
         void setInBuffer(int16_t *buffer, bool ownsBuffer = false) {
             mInBuffer = buffer;
@@ -2052,12 +2020,12 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
 
         void incTrackCnt() { android_atomic_inc(&mTrackCnt); }
         void decTrackCnt() { android_atomic_dec(&mTrackCnt); }
-        int32_t trackCnt() const { return android_atomic_acquire_load(&mTrackCnt);}
+        int32_t trackCnt() const { return android_atomic_acquire_load(&mTrackCnt); }
 
         void incActiveTrackCnt() { android_atomic_inc(&mActiveTrackCnt);
                                    mTailBufferCount = mMaxTailBuffers; }
         void decActiveTrackCnt() { android_atomic_dec(&mActiveTrackCnt); }
-        int32_t activeTrackCnt() const { return android_atomic_acquire_load(&mActiveTrackCnt);;}
+        int32_t activeTrackCnt() const { return android_atomic_acquire_load(&mActiveTrackCnt); }
 
         uint32_t strategy() const { return mStrategy; }
         void setStrategy(uint32_t strategy)
@@ -2113,9 +2081,11 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
         int mSessionId;             // audio session ID
         int16_t *mInBuffer;         // chain input buffer
         int16_t *mOutBuffer;        // chain output buffer
+
         // 'volatile' here means these are accessed with atomic operations instead of mutex
         volatile int32_t mActiveTrackCnt;    // number of active tracks connected
         volatile int32_t mTrackCnt;          // number of tracks connected
+
         int32_t mTailBufferCount;   // current effect tail buffer count
         int32_t mMaxTailBuffers;    // maximum effect tail buffers
         bool mOwnInBuffer;          // true if the chain owns its input buffer
@@ -2181,27 +2151,30 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
     };
 
     struct AudioStreamIn {
-        audio_hw_device_t* const hwDev;
+        AudioHwDevice* const audioHwDev;
         audio_stream_in_t* const stream;
 
-        AudioStreamIn(audio_hw_device_t *dev, audio_stream_in_t *in) :
-            hwDev(dev), stream(in) {}
-    };
+        audio_hw_device_t* hwDev() const { return audioHwDev->hwDevice(); }
 
+        AudioStreamIn(AudioHwDevice *dev, audio_stream_in_t *in) :
+            audioHwDev(dev), stream(in) {}
+    };
 #ifdef QCOM_HARDWARE
     struct AudioSessionDescriptor {
         bool    mActive;
         int     mStreamType;
         float   mVolumeLeft;
         float   mVolumeRight;
+        float   mVolumeScale;
         audio_hw_device_t   *hwDev;
         audio_stream_out_t  *stream;
         audio_output_flags_t flag;
+        void *trackRefPtr;
+        audio_devices_t device;
         AudioSessionDescriptor(audio_hw_device_t *dev, audio_stream_out_t *out, audio_output_flags_t outflag) :
             hwDev(dev), stream(out), flag(outflag)  {}
     };
 #endif
-
     // for mAudioSessionRefs only
     struct AudioSessionRef {
         AudioSessionRef(int sessionid, pid_t pid) :
@@ -2220,7 +2193,7 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
                 // always take mLock before mHardwareLock
 
                 // These two fields are immutable after onFirstRef(), so no lock needed to access
-                AudioHwDevice*                  mPrimaryHardwareDev; // mAudioHwDevs[0] or NULL
+                AudioHwDevice*                      mPrimaryHardwareDev; // mAudioHwDevs[0] or NULL
                 DefaultKeyedVector<audio_module_handle_t, AudioHwDevice*>  mAudioHwDevs;
 
     // for dump, indicates which hardware operation is currently in progress (but not stream ops)
@@ -2241,7 +2214,7 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
         AUDIO_HW_SET_MIC_MUTE,          // set_mic_mute
         AUDIO_HW_SET_VOICE_VOLUME,      // set_voice_volume
         AUDIO_HW_SET_PARAMETER,         // set_parameters
-#if defined(QCOM_HARDWARE) && defined(QCOM_FM_ENABLED)
+#ifdef QCOM_FM_ENABLED
         AUDIO_SET_FM_VOLUME,
 #endif
         AUDIO_HW_GET_INPUT_BUFFER_SIZE, // get_input_buffer_size
@@ -2257,25 +2230,23 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
                 DefaultKeyedVector< audio_io_handle_t, sp<PlaybackThread> >  mPlaybackThreads;
                 stream_type_t                       mStreamTypes[AUDIO_STREAM_CNT];
 
-                // both are protected by mLock
+                // member variables below are protected by mLock
                 float                               mMasterVolume;
                 bool                                mMasterMute;
+                // end of variables protected by mLock
 
                 DefaultKeyedVector< audio_io_handle_t, sp<RecordThread> >    mRecordThreads;
 
-#ifdef QCOM_HARDWARE
                 DefaultKeyedVector< sp<IBinder>, sp<NotificationClient> >    mNotificationClients;
-#else
-                DefaultKeyedVector< pid_t, sp<NotificationClient> >    mNotificationClients;
-#endif
                 volatile int32_t                    mNextUniqueId;  // updated by android_atomic_inc
                 audio_mode_t                        mMode;
                 bool                                mBtNrecIsOff;
 #ifdef QCOM_HARDWARE
                 DefaultKeyedVector<audio_io_handle_t, AudioSessionDescriptor *> mDirectAudioTracks;
                 int                                 mA2DPHandle; // Handle to notify A2DP connection status
-
+#endif
                 // protected by mLock
+#ifdef QCOM_HARDWARE
                 volatile bool                       mIsEffectConfigChanged;
 #endif
                 Vector<AudioSessionRef*> mAudioSessionRefs;
@@ -2286,10 +2257,6 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
                 int                                 mLPANumChannels;
                 volatile bool                       mAllChainsLocked;
 #endif
-#ifdef STE_AUDIO
-                SortedVector<uint32_t*> mInputClients;
-#endif
-
                 float       masterVolume_l() const;
                 bool        masterMute_l() const;
                 audio_module_handle_t loadHwModule_l(const char *name);
@@ -2303,7 +2270,6 @@ private:
     // for use from destructor
     status_t    closeOutput_nonvirtual(audio_io_handle_t output);
     status_t    closeInput_nonvirtual(audio_io_handle_t input);
-
 };
 
 

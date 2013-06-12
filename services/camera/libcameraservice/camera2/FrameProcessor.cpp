@@ -25,6 +25,12 @@
 #include "../Camera2Device.h"
 #include "../Camera2Client.h"
 
+enum {
+
+    HAL_PIXEL_FORMAT_BLOB = 0x21,
+
+};
+
 namespace android {
 namespace camera2 {
 

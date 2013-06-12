@@ -89,7 +89,6 @@ struct OMXCodec : public MediaSource,
 
     // from MediaBufferObserver
     virtual void signalBufferReturned(MediaBuffer *buffer);
-
 #ifdef STE_HARDWARE
     static uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue);
 #endif

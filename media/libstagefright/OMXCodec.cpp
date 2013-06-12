@@ -1527,6 +1527,7 @@ status_t OMXCodec::setVideoOutputFormat(
 #ifdef USE_SAMSUNG_COLORFORMAT
                || format.eColorFormat == OMX_SEC_COLOR_FormatNV12TPhysicalAddress
                || format.eColorFormat == OMX_SEC_COLOR_FormatNV12Tiled
+
 #endif
 #ifdef STE_HARDWARE
                || format.eColorFormat == OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB
@@ -2100,11 +2101,9 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
 #ifdef STE_HARDWARE
-    if (!(mQuirks & kRequiresStoreMetaDataBeforeIdle)
-            && (mFlags & kStoreMetaDataInVideoBuffers)
+      OmxToHALFormat(def.format.video.eColorFormat));
 #else
             eColorFormat);
-
 #endif
 #endif
 

@@ -511,7 +511,6 @@ const char CameraParameters::KEY_RECORD_STRIDE[] = "record-stride";
 const char CameraParameters::KEY_RECORD_SLICE_HEIGHT[] = "record-slice-height";
 #endif
 
-
 CameraParameters::CameraParameters()
                 : mMap()
 {
