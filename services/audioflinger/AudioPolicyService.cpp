@@ -291,9 +291,10 @@ audio_io_handle_t AudioPolicyService::getInput(audio_source_t inputSource,
     // the audio_in_acoustics_t parameter is ignored by get_input()
     audio_io_handle_t input = mpAudioPolicy->get_input(mpAudioPolicy, inputSource, samplingRate,
 #ifdef STE_AUDIO
-                                                       format, channelsMask, (audio_in_acoustics_t) 0, inputClientId);
+                                                       format, channelMask, (audio_in_acoustics_t) 0, inputClientId);
 #else
                                                        format, channelMask, (audio_in_acoustics_t) 0);
+#endif
 
     if (input == 0) {
         return input;
@@ -1522,7 +1523,11 @@ static audio_io_handle_t aps_open_input(void *service,
                                         uint32_t *pSamplingRate,
                                         audio_format_t *pFormat,
                                         audio_channel_mask_t *pChannelMask,
+#ifdef
+                                        audio_in_acoustics_t acoustics,
+                                        audio_input_clients *inputClientId)                                                                    
                                         audio_in_acoustics_t acoustics)
+#endif
 {
     sp<IAudioFlinger> af = AudioSystem::get_audio_flinger();
     if (af == 0) {
@@ -1542,7 +1547,9 @@ static audio_io_handle_t aps_open_input_on_module(void *service,
                                                   audio_devices_t *pDevices,
                                                   uint32_t *pSamplingRate,
                                                   audio_format_t *pFormat,
+                                                 
 #ifdef STE_AUDIO
+                                                  audio_channel_mask_t *pChannelMask,
                                                   audio_input_clients *inputClientId)
 #else
                                                   audio_channel_mask_t *pChannelMask)

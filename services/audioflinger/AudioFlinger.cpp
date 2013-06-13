@@ -3951,7 +3951,7 @@ bool AudioFlinger::MixerThread::checkForNewParameters_l()
         }
 #ifdef STE_AUDIO
         if (param.getInt(String8(AudioParameter::keySinkLatency), value) == NO_ERROR) {
-            sendConfigEvent_l(AudioSystem::SINK_LATENCY_CHANGED, value);
+            sendIoConfigEvent_l(AudioSystem::SINK_LATENCY_CHANGED, value);
         }
 #endif
 
@@ -8141,7 +8141,7 @@ status_t AudioFlinger::closeInput(audio_io_handle_t input, audio_input_clients *
     sp <RecordThread> thread;
     thread = checkRecordThread_l(input);
     if (thread != NULL) {
-        stream = thread->getInput();
+        stream = thread->AudioStreamIn();
     }
     if (inputClientId == NULL) {
         if (thread == NULL) {
@@ -8154,7 +8154,7 @@ status_t AudioFlinger::closeInput(audio_io_handle_t input, audio_input_clients *
     }
 
     AudioStreamIn *in = (AudioStreamIn *)stream;
-    in->hwDevice->close_input_stream(in->hwDevice, in->stream);
+    in->audioHwDev->close_input_stream(in->audioHwDev, in->stream);
     delete in;
 
     if (thread != NULL) {
