@@ -292,12 +292,12 @@ const char CameraParameters::SCENE_MODE_FIREWORKS[] = "fireworks";
 const char CameraParameters::SCENE_MODE_SPORTS[] = "sports";
 const char CameraParameters::SCENE_MODE_PARTY[] = "party";
 const char CameraParameters::SCENE_MODE_CANDLELIGHT[] = "candlelight";
-#ifdef QCOM_HARDWARE
-#if defined(SAMSUNG_CAMERA_LEGACY) && defined(STE_HARDWARE)
+#ifdef STE_HARDWARE
 const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "back-light";
 #else
 const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "backlight";
 #endif
+#ifdef QCOM_HARDWARE
 const char CameraParameters::SCENE_MODE_FLOWERS[] = "flowers";
 #endif
 const char CameraParameters::SCENE_MODE_BARCODE[] = "barcode";

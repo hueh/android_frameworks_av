@@ -186,13 +186,34 @@ public:
 
     virtual status_t restoreOutput(audio_io_handle_t output);
 
+#ifdef STE_AUDIO
+    virtual uint32_t *addInputClient(uint32_t clientId);
+
+    virtual status_t removeInputClient(uint32_t *pClientId);
+#endif
+
     virtual audio_io_handle_t openInput(audio_module_handle_t module,
                                         audio_devices_t *pDevices,
                                         uint32_t *pSamplingRate,
                                         audio_format_t *pFormat,
+#ifdef STE_AUDIO
+                                        audio_channel_mask_t *pChannelMask,
+                                        audio_input_clients *pInputClientId = NULL);
+
+    virtual status_t closeInput(audio_io_handle_t input, audio_input_clients *inputClientId = NULL);
+    virtual size_t readInput(audio_io_handle_t input,
+                            audio_input_clients inputClientId,
+                            void *buffer,
+                            uint32_t bytes,
+                            uint32_t *pOverwrittenBytes);
+
+#else
                                         audio_channel_mask_t *pChannelMask);
 
     virtual status_t closeInput(audio_io_handle_t input);
+#endif
+
+
 
     virtual status_t setStreamOutput(audio_stream_type_t stream, audio_io_handle_t output);
 
@@ -1626,7 +1647,14 @@ private:
                         uint32_t sampleRate,
                         audio_channel_mask_t channelMask,
                         audio_io_handle_t id,
+
+#ifdef STE_AUDIO
+                        audio_devices_t device,
+                        audio_input_clients pInputClientId);
+#else
                         audio_devices_t device);
+#endif
+
                 virtual     ~RecordThread();
 
         // no addTrack_l ?
@@ -1715,6 +1743,9 @@ private:
                 const int                           mReqChannelCount;
                 const uint32_t                      mReqSampleRate;
                 ssize_t                             mBytesRead;
+#ifdef STE_AUDIO
+                audio_input_clients                 mInputClientId;
+#endif
                 // sync event triggering actual audio capture. Frames read before this event will
                 // be dropped and therefore not read by the application.
                 sp<SyncEvent>                       mSyncStartEvent;
@@ -1940,6 +1971,9 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
         EffectHandle(const EffectHandle&);
         EffectHandle& operator =(const EffectHandle&);
 
+#ifdef STE_AUDIO
+        Mutex               mLock;          // mutex protecting mEffect pointer
+#endif
         sp<EffectModule> mEffect;           // pointer to controlled EffectModule
         sp<IEffectClient> mEffectClient;    // callback interface for client notifications
         /*const*/ sp<Client> mClient;       // client for shared memory allocation, see disconnect()
@@ -2257,6 +2291,10 @@ mutable Mutex               mLock;      // mutex for process, commands and handl
                 int                                 mLPANumChannels;
                 volatile bool                       mAllChainsLocked;
 #endif
+#ifdef STE_AUDIO
+                SortedVector<uint32_t*> mInputClients;
+#endif
+
                 float       masterVolume_l() const;
                 bool        masterMute_l() const;
                 audio_module_handle_t loadHwModule_l(const char *name);

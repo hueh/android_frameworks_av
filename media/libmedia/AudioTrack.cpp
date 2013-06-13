@@ -192,6 +192,10 @@ AudioTrack::~AudioTrack()
     ALOGV_IF(mSharedBuffer != 0, "Destructor sharedBuffer: %p", mSharedBuffer->pointer());
 
     if (mStatus == NO_ERROR) {
+#ifdef STE_AUDIO
+        AudioSystem::unregisterLatencyNotificationClient(mLatencyClientId);
+#endif
+
         // Make sure that callback function exits in the case where
         // it is looping on buffer full condition in obtainBuffer().
         // Otherwise the callback thread will never exit.
@@ -390,10 +394,14 @@ status_t AudioTrack::set(
     mFormat = format;
     mChannelMask = channelMask;
     mChannelCount = channelCount;
-
+#ifdef STE_AUDIO
+    mSharedBuffer = sharedBuffer;
+#endif
     mMuted = false;
     mActive = false;
-
+#ifdef STE_AUDIO
+    mUserData = user;
+#endif
     mLoopCount = 0;
     mMarkerPosition = 0;
     mMarkerReached = false;
@@ -1094,6 +1102,11 @@ status_t AudioTrack::createTrack_l(
     if (mCblk->frameCount > mFrameCount) {
         mFrameCount = mCblk->frameCount;
     }
+#ifdef STE_AUDIO
+    if (mLatencyClientId != -1) {
+        AudioSystem::unregisterLatencyNotificationClient(mLatencyClientId);
+    }
+#endif
     return NO_ERROR;
 }
 
@@ -1634,6 +1647,16 @@ status_t AudioTrack::getTimeStamp(uint64_t *tstamp) {
     return NO_ERROR;
 }
 #endif
+
+#ifdef STE_AUDIO
+// static
+void AudioTrack::LatencyCallback(void *cookie, audio_io_handle_t output, uint32_t sinkLatency)
+{
+    AudioTrack *me = static_cast<AudioTrack *>(cookie);
+    me->mLatency = sinkLatency + (1000*me->mCblk->frameCount) / me->mCblk->sampleRate;
+}
+#endif
+
 
 // =========================================================================
 
