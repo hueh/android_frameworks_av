@@ -67,7 +67,7 @@ public:
         EVENT_NEW_POS = 4,          // Playback head is at a new position (See setPositionUpdatePeriod()).
 #ifdef STE_AUDIO
         EVENT_BUFFER_END = 5,       // Playback head is at the end of the buffer.
-        EVENT_LATENCY_CHANGED = ,   // Audio sink latency has changed.
+        EVENT_LATENCY_CHANGED = 6,   // Audio sink latency has changed.
         EVENT_HW_FAIL = 7,
 #else
         EVENT_BUFFER_END = 5,       // Playback head is at the end of the buffer.

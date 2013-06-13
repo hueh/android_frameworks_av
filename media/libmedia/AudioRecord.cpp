@@ -211,6 +211,8 @@ status_t AudioRecord::set(
                                                     mpInputClientId);
 #else
                                                     mSessionId);
+#endif
+
     if (input == 0) {
         ALOGE("Could not get audio input for record source %d", inputSource);
         return BAD_VALUE;

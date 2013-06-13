@@ -226,7 +226,7 @@ public:
     static audio_io_handle_t getInput(audio_source_t inputSource,
                                     uint32_t samplingRate = 0,
                                     audio_format_t format = AUDIO_FORMAT_DEFAULT,
-                                    audio_channel_mask_t channelMask = AUDIO_CHANNEL_IN_MONO.
+                                    audio_channel_mask_t channelMask = AUDIO_CHANNEL_IN_MONO,
 #ifdef STE_AUDIO
                                     int sessionId = 0,
                                     audio_input_clients *inputClientId = NULL);
