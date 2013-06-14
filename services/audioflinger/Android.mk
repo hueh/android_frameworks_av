@@ -2,6 +2,10 @@ LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
 
+#ifdef STE_AUDIO
+LOCAL_CFLAGS= -fpermissive -Wno-deprecated -Wno-conversion
+#endif
+
 LOCAL_SRC_FILES := \
     ISchedulingPolicyService.cpp \
     SchedulingPolicyService.cpp
@@ -17,6 +21,9 @@ ifeq ($(TARGET_QCOM_AUDIO_VARIANT),caf)
 LOCAL_CFLAGS += -DQCOM_ENHANCED_AUDIO
 endif
 
+LOCAL_CFLAGS= -fpermissive -Wno-deprecated -Wno-conversion
+LOCAL_CFLAGS:= -fpermissive -Wno-deprecated -Wno-conversion
+LOCAL_CFLAGS += -fpermissive -Wno-deprecated -Wno-conversion
 LOCAL_SRC_FILES:=               \
     AudioFlinger.cpp            \
     AudioMixer.cpp.arm          \

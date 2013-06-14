@@ -8133,33 +8133,35 @@ audio_io_handle_t AudioFlinger::openInput(audio_module_handle_t module,
 #ifdef STE_AUDIO
 status_t AudioFlinger::closeInput(audio_io_handle_t input, audio_input_clients *inputClientId)
 {
+    return closeInput_nonvirtual(input);
+}
+
+status_t AudioFlinger::closeInput_nonvirtual(audio_io_handle_t input)
+{
     // keep strong reference on the record thread so that
     // it is not destroyed while exit() is executed
-    Mutex::Autolock _l(mLock);
-    AudioStreamIn* stream = (AudioStreamIn*)input;
-    audio_input_clients clientId = (audio_input_clients) *inputClientId;
-    sp <RecordThread> thread;
-    thread = checkRecordThread_l(input);
-    if (thread != NULL) {
-        stream = thread->AudioStreamIn();
-    }
-    if (inputClientId == NULL) {
-        if (thread == NULL) {
+    sp<RecordThread> thread;
+    {
+        Mutex::Autolock _l(mLock);
+        thread = checkRecordThread_l(input);
+        if (thread == 0) {
             return BAD_VALUE;
         }
+
         ALOGV("closeInput() %d", input);
         void *param2 = 0;
         audioConfigChanged_l(AudioSystem::INPUT_CLOSED, input, param2);
         mRecordThreads.removeItem(input);
     }
+    thread->exit();
+    // The thread entity (active unit of execution) is no longer running here,
+    // but the ThreadBase container still exists.
 
-    AudioStreamIn *in = (AudioStreamIn *)stream;
-    in->audioHwDev->close_input_stream(in->audioHwDev, in->stream);
+    AudioStreamIn *in = thread->clearInput();
+    ALOG_ASSERT(in != NULL, "in shouldn't be NULL");
+    // from now on thread->mInput is NULL
+    in->hwDev()->close_input_stream(in->hwDev(), in->stream);
     delete in;
-
-    if (thread != NULL) {
-        thread->exit();
-    }
 
     return NO_ERROR;
 }
@@ -8193,7 +8195,7 @@ status_t AudioFlinger::closeInput_nonvirtual(audio_io_handle_t input)
     AudioStreamIn *in = thread->clearInput();
     ALOG_ASSERT(in != NULL, "in shouldn't be NULL");
     // from now on thread->mInput is NULL
-    in->hwDev()->close_input_stream(in->hwDev(), in->stream);
+    in->hwDevice()->close_input_stream(in->hwDevice(), in->stream);
     delete in;
 
     return NO_ERROR;

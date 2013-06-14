@@ -1523,9 +1523,10 @@ static audio_io_handle_t aps_open_input(void *service,
                                         uint32_t *pSamplingRate,
                                         audio_format_t *pFormat,
                                         audio_channel_mask_t *pChannelMask,
-#ifdef
+#ifdef STE_AUDIO
                                         audio_in_acoustics_t acoustics,
-                                        audio_input_clients *inputClientId)                                                                    
+                                        audio_input_clients *inputClientId)
+#else                                                                    
                                         audio_in_acoustics_t acoustics)
 #endif
 {
@@ -1547,7 +1548,6 @@ static audio_io_handle_t aps_open_input_on_module(void *service,
                                                   audio_devices_t *pDevices,
                                                   uint32_t *pSamplingRate,
                                                   audio_format_t *pFormat,
-                                                 
 #ifdef STE_AUDIO
                                                   audio_channel_mask_t *pChannelMask,
                                                   audio_input_clients *inputClientId)

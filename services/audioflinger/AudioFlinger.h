@@ -2306,8 +2306,10 @@ private:
     sp<Client>  registerPid_l(pid_t pid);    // always returns non-0
 
     // for use from destructor
+
     status_t    closeOutput_nonvirtual(audio_io_handle_t output);
     status_t    closeInput_nonvirtual(audio_io_handle_t input);
+
 };
 
 
