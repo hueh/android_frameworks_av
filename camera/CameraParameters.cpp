@@ -212,7 +212,6 @@ const char CameraParameters::POST_PROCESSING_ENABLE[] = "enable";
 const char CameraParameters::POST_PROCESSING_BYPASS[] = "bypass";
 const char CameraParameters::POST_PROCESSING_DELAY[] = "delay";
 const char CameraParameters::SCENE_MODE_OFF[] = "off";
-const char CameraParameters::SCENE_MODE_TEXT[] = "text";
 const char CameraParameters::BURST_MODE_LIMIT20[] = "limit-20";
 const char CameraParameters::BURST_MODE_UNLIMITED[] = "unlimited";
 const char CameraParameters::OIS_MODE_OFF[] = "off";
@@ -293,9 +292,10 @@ const char CameraParameters::SCENE_MODE_SPORTS[] = "sports";
 const char CameraParameters::SCENE_MODE_PARTY[] = "party";
 const char CameraParameters::SCENE_MODE_CANDLELIGHT[] = "candlelight";
 #ifdef STE_HARDWARE
-const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "back-light";
-#else
 const char CameraParameters::SCENE_MODE_BACKLIGHT[] = "backlight";
+const char CameraParameters::SCENE_MODE_DUSKDAWN[] = "duskdawn";
+const char CameraParameters::SCENE_MODE_FALLCOLOR[] = "fallcolor";
+const char CameraParameters::SCENE_MODE_TEXT[] = "text";
 #endif
 #ifdef QCOM_HARDWARE
 const char CameraParameters::SCENE_MODE_FLOWERS[] = "flowers";
@@ -315,11 +315,11 @@ const char CameraParameters::SCENE_DETECT_ON[] = "on";
 // Formats for setPreviewFormat and setPictureFormat.
 const char CameraParameters::PIXEL_FORMAT_YUV422SP[] = "yuv422sp";
 const char CameraParameters::PIXEL_FORMAT_YUV420SP[] = "yuv420sp";
-#ifdef QCOM_HARDWARE
-const char CameraParameters::PIXEL_FORMAT_YUV420SP_ADRENO[] = "yuv420sp-adreno";
-#endif
 #ifdef STE_HARDWARE
 const char CameraParameters::PIXEL_FORMAT_YUV420SPNV12[] = "yuv420spnv12";
+#endif
+#ifdef QCOM_HARDWARE
+const char CameraParameters::PIXEL_FORMAT_YUV420SP_ADRENO[] = "yuv420sp-adreno";
 #endif
 const char CameraParameters::PIXEL_FORMAT_YUV422I[] = "yuv422i-yuyv";
 const char CameraParameters::PIXEL_FORMAT_YUV420P[]  = "yuv420p";
@@ -477,14 +477,6 @@ const char CameraParameters::VINTAGE_MODE_COOL[] = "cool";
 const char CameraParameters::VINTAGE_MODE_NORMAL[] = "normal";
 const char CameraParameters::VINTAGE_MODE_OFF[] = "off";
 const char CameraParameters::VINTAGE_MODE_WARM[] = "warm";
-#ifndef STE_HARDWARE
-const char CameraParameters::SCENE_MODE_DAWN[] = "dusk-dawn";
-#else
-const char CameraParameters::SCENE_MODE_DUSKDAWN[] = "dusk-dawn";
-#endif
-const char CameraParameters::SCENE_MODE_FALL[] = "fall-color";
-const char CameraParameters::SCENE_MODE_FALL_COLOR[] = "fall-color";
-const char CameraParameters::SCENE_MODE_TEXT[] = "text";
 
 static const char* portrait = "portrait";
 static const char* landscape = "landscape";
