@@ -247,6 +247,20 @@ static int CompareSoftwareCodecsFirst(
     return 0;
 }
 
+#ifdef STE_HARDWARE
+static uint32_t OmxToHALFormat(OMX_COLOR_FORMATTYPE omxValue) {
+    switch (omxValue) {
+        case OMX_STE_COLOR_FormatYUV420PackedSemiPlanarMB:
+            return HAL_PIXEL_FORMAT_YCBCR42XMBN;
+        case OMX_COLOR_FormatYUV420Planar:
+            return HAL_PIXEL_FORMAT_YCbCr_420_P;
+        default:
+            ALOGI("Unknown OMX pixel format (0x%X), passing it on unchanged", omxValue);
+            return omxValue;
+    }
+}
+#endif
+
 // static
 void OMXCodec::findMatchingCodecs(
         const char *mime,
@@ -2081,6 +2095,9 @@ status_t OMXCodec::allocateOutputBuffersFromNativeWindow() {
             def.format.video.nFrameHeight,
             def.format.video.eColorFormat);
 #else
+#ifdef
+           OmxToHALFormat(def.format.video.eColorFormat));
+#endif
     OMX_COLOR_FORMATTYPE eColorFormat;
 
     switch (def.format.video.eColorFormat) {
@@ -4788,6 +4805,9 @@ static const char *videoCompressionFormatString(OMX_VIDEO_CODINGTYPE type) {
         "OMX_VIDEO_CodingRV",
         "OMX_VIDEO_CodingAVC",
         "OMX_VIDEO_CodingMJPEG",
+#ifdef STE_HARDWARE
+        "OMX_VIDEO_CodingVC1",
+#endif
     };
 
     size_t numNames = sizeof(kNames) / sizeof(kNames[0]);
