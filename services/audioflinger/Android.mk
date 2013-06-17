@@ -3,7 +3,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 #ifdef STE_AUDIO
-LOCAL_CFLAGS= -fpermissive -Wno-deprecated -Wno-conversion
+LOCAL_CFLAGS= -Wno-conversion
 #endif
 
 LOCAL_SRC_FILES := \
@@ -21,16 +21,16 @@ ifeq ($(TARGET_QCOM_AUDIO_VARIANT),caf)
 LOCAL_CFLAGS += -DQCOM_ENHANCED_AUDIO
 endif
 
-LOCAL_CFLAGS= -fpermissive -Wno-deprecated -Wno-conversion
-LOCAL_CFLAGS:= -fpermissive -Wno-deprecated -Wno-conversion
-LOCAL_CFLAGS += -fpermissive -Wno-deprecated -Wno-conversion
+LOCAL_CFLAGS= -Wno-conversion
+LOCAL_CFLAGS:= -Wno-conversion
+LOCAL_CFLAGS += -Wno-conversion
 LOCAL_SRC_FILES:=               \
     AudioFlinger.cpp            \
     AudioMixer.cpp.arm          \
     AudioResampler.cpp.arm      \
     AudioPolicyService.cpp      \
     ServiceUtilities.cpp        \
-	AudioResamplerCubic.cpp.arm \
+    AudioResamplerCubic.cpp.arm \
     AudioResamplerSinc.cpp.arm
 
 LOCAL_SRC_FILES += StateQueue.cpp

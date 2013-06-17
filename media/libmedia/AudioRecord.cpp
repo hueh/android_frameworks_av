@@ -235,6 +235,9 @@ status_t AudioRecord::set(
     if (notificationFrames == 0) {
         notificationFrames = frameCount/2;
     }
+#ifndef STE_AUDIO
+mInputSource = inputSource;
+#endif
 
     // create the IAudioRecord
     status = openRecord_l(sampleRate, format, channelMask,
@@ -266,7 +269,7 @@ status_t AudioRecord::set(
     mMarkerReached = false;
     mNewPosition = 0;
     mUpdatePeriod = 0;
-#ifndef STE_AUDIO
+#ifdef STE_AUDIO
     mInputSource = inputSource;
 #endif
     mInput = input;
