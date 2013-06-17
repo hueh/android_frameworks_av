@@ -28,14 +28,8 @@
 #include <utils/Log.h>
 #include <utils/Trace.h>
 #include <utils/Timers.h>
-#include <system/camera.h>
 #include "Camera2Device.h"
 
-enum {
-
-    HAL_PIXEL_FORMAT_BLOB = 0x21,
-
-};
 namespace android {
 
 Camera2Device::Camera2Device(int id):

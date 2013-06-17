@@ -366,6 +366,12 @@ uint32_t OMXCodec::getComponentQuirks(
                 index, "output-buffers-are-unreadable")) {
         quirks |= kOutputBuffersAreUnreadable;
     }
+#ifdef STE_AUDIO
+    if (list->codecHasQuirk(
+                index, "requires-store-metadata-before-idle")) {
+        quirks |= kRequiresStoreMetaDataBeforeIdle;
+    }
+#endif
 #ifdef QCOM_HARDWARE
     if (list->codecHasQuirk(
                 index, "requires-loaded-to-idle-after-allocation")) {
