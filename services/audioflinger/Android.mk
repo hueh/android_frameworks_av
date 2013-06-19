@@ -16,10 +16,8 @@ include $(CLEAR_VARS)
 ifeq ($(TARGET_QCOM_AUDIO_VARIANT),caf)
 LOCAL_CFLAGS += -DQCOM_ENHANCED_AUDIO
 endif
-ifeq ($(TARGET_USES_STE_AUDIO),true)
 LOCAL_CFLAGS += -DSTE_AUDIO
 LOCAL_CFLAGS += -Wno-conversion -fpermissive
-endif
 LOCAL_SRC_FILES:=               \
     AudioFlinger.cpp            \
     AudioMixer.cpp.arm          \
