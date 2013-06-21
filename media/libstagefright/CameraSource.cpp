@@ -130,9 +130,11 @@ static int32_t getColorFormat(const char* colorFormat) {
     }
 #endif
 
+#ifndef SONY_ICS_BLOBS
     if (!strcmp(colorFormat, CameraParameters::PIXEL_FORMAT_ANDROID_OPAQUE)) {
         return OMX_COLOR_FormatAndroidOpaque;
     }
+#endif
 
     ALOGE("Uknown color format (%s), please add it to "
          "CameraSource::getColorFormat", colorFormat);
