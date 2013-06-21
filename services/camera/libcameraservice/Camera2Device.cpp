@@ -28,7 +28,9 @@
 #include <utils/Log.h>
 #include <utils/Trace.h>
 #include <utils/Timers.h>
+#include <system/graphics.h>
 #include "Camera2Device.h"
+#include <system/graphics.h>
 
 namespace android {
 

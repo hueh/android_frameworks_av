@@ -25,6 +25,7 @@
 #include <utils/String8.h>
 #include <utils/String16.h>
 #include <utils/Vector.h>
+#include <system/graphics.h>
 
 #include "hardware/camera2.h"
 #include "camera2/CameraMetadata.h"

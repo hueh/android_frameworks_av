@@ -19,6 +19,7 @@
 
 #include "Camera2Device.h"
 #include "CameraService.h"
+#include <system/graphics.h>
 #include "camera2/Parameters.h"
 #include "camera2/FrameProcessor.h"
 #include "camera2/StreamingProcessor.h"

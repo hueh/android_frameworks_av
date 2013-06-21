@@ -21,6 +21,7 @@
 #include <gui/SurfaceTextureClient.h>
 #include <gui/Surface.h>
 
+#include <system/graphics.h>
 #include "CameraClient.h"
 #include "CameraHardwareInterface.h"
 #include "CameraService.h"

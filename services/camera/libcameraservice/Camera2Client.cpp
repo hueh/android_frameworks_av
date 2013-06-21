@@ -24,6 +24,7 @@
 #include <cutils/properties.h>
 #include <gui/SurfaceTextureClient.h>
 #include <gui/Surface.h>
+#include <system/graphics.h>
 #include "camera2/Parameters.h"
 #include "Camera2Client.h"
 

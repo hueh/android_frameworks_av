@@ -19,6 +19,7 @@
 
 #include <utils/Log.h>
 #include <utils/Trace.h>
+#include <system/graphics.h>
 
 #include "BurstCapture.h"
 

@@ -19,6 +19,7 @@
 
 #include <utils/Log.h>
 #include <ui/GraphicBufferMapper.h>
+#include <system/graphics.h>
 
 #include "JpegCompressor.h"
 
